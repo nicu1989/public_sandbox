@@ -1,0 +1,78 @@
+name: cap-test
+
+on:
+  workflow_dispatch:
+  #only for visibility
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check-cap:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install libcap tools
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libcap2-bin
+
+      - name: Prep binaries and grant cap_sys_nice=ep
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p bin
+
+          # Copy commands to binaries
+          cp "$(command -v chrt)" ./bin/chrt
+          cp "$(command -v renice)" ./bin/renice
+
+          # Grant cap_sys_nice=ep
+          sudo setcap cap_sys_nice=ep ./bin/chrt 
+          sudo setcap cap_sys_nice=ep ./bin/renice
+
+          # Show capabilities
+          getcap ./bin/chrt ./bin/renice
+
+      - name: Failure without caps (expected to fail)
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          # chrt without caps should fail for non-root when requesting RT policy
+          if chrt -f 10 true; then
+            echo "Fail: chrt succeeded without caps"; exit 1
+          else
+            echo "Pass: chrt failed as expected (no CAP_SYS_NICE)"
+          fi
+
+          # renice to a negative value should also fail without caps
+          if renice -n -20 -p $$; then
+            echo "Fail: renice succeeded without caps"; exit 1
+          else
+            echo "Pass: renice failed as expected (no CAP_SYS_NICE)"
+          fi
+
+      - name: Use chrt with cap_sys_nice=ep (no sudo)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # FIFO priority 10 and show its policy
+          ./bin/chrt -f 10 bash -lc 'echo "Inside RT shell: $(chrt -p $$)"'
+          echo "Pass: chrt with file capability set policy without sudo"
+
+      - name: Use renice with cap_sys_nice=ep (no sudo)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # Start a dummy process and bump its nice to -20 using cap-enabled renice
+          sleep 60 &
+          pid=$!
+          ./bin/renice -n -20 -p "$pid"
+          ps -o pid,rtprio,ni,cmd -p "$pid" | sed -n '2p'
+          kill "$pid"
+          echo "Pass: renice changed priority without sudo"
+
+

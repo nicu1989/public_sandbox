@@ -1,0 +1,65 @@
+name: sudo-test
+
+on:
+  workflow_dispatch:
+  #only for visibility
+  pull_request:
+    branches:
+      - main
+
+
+jobs:
+  check-sudo:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Show runner info
+        run: |
+          echo "User: $(whoami)"
+          echo "UID: $(id -u)"
+          echo "Groups: $(id -Gn)"
+          uname -a
+
+      - name: Test passwordless sudo works
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # Non-interactive; exits non-zero if sudo isn't available or prompts for a password
+          sudo -n true
+          # List privileges (helpful in logs)
+          sudo -l
+
+      - name: Do a privileged action (install jq)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y jq
+          jq --version
+
+      - name: Run dummy script that requires sudo
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          cat > ./needs-root.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          # Fail unless we're root
+          if [[ "${EUID}" -ne 0 ]]; then
+            echo "ERROR: must be run as root" >&2
+            exit 1
+          fi
+
+          # Write file as root
+          f="/root/sudo_dummy_$RANDOM.txt"
+          echo "hello from root" > "$f"
+          chmod 600 "$f"
+          ls -l "$f"
+          echo "OK: created $f as root"
+          EOF
+
+          chmod +x ./needs-root.sh
+          sudo ./needs-root.sh
+

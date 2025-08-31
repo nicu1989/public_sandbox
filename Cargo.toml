@@ -1,0 +1,19 @@
+[package]
+name = "crates-io-demo-lib-nicu1989"
+version = "0.1.0"
+edition = "2021"
+description = "A minimal Rust library used to demo how to publish to crates.io."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/nicu1989/"
+repository = "https://github.com/nicu1989/public_sandbox"
+keywords = ["demo", "example", "crates-io", "publish"]
+categories = ["development-tools"]
+rust-version = "1.64"
+
+[lib]
+path = "src/lib.rs"
+
+[package.metadata.docs.rs]
+all-features = false
+
